@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Dropzone from "react-dropzone";
 
-const SERVER_URL = process.env.NEXT_PUBLIC_SERVER_URL || "/api-server";
+const RAW_SERVER_URL = process.env.NEXT_PUBLIC_SERVER_URL;
+const SERVER_URL = RAW_SERVER_URL && /^https?:\/\//.test(RAW_SERVER_URL) ? RAW_SERVER_URL : "/api-server";
 
 type Preset = { id: string; name: string; options: any };
 
@@ -56,12 +57,12 @@ export default function Home() {
     try {
       const form = new FormData();
       form.append("video", acceptedFiles[0]);
-      const resp = await fetch(`${SERVER_URL}/api/upload`, { method: "POST", body: form });
+      const resp = await fetch(`${SERVER_URL}/upload`, { method: "POST", body: form });
       const json = await resp.json();
       if (resp.ok) {
         setFileId(json.fileId);
         setFileName(acceptedFiles[0].name);
-        setVideoUrl(`${SERVER_URL}/api/preview?fileId=${encodeURIComponent(json.fileId)}&duration=8`);
+        setVideoUrl(`${SERVER_URL}/preview?fileId=${encodeURIComponent(json.fileId)}&duration=8`);
       } else {
         alert(json.error || "Upload failed");
       }
@@ -82,7 +83,7 @@ export default function Home() {
       if (v === undefined || v === null) continue;
       params.set(k, String(v));
     }
-    setVideoUrl(`${SERVER_URL}/api/preview?${params.toString()}`);
+    setVideoUrl(`${SERVER_URL}/preview?${params.toString()}`);
   }, [fileId, options]);
 
   useEffect(() => {
@@ -92,7 +93,7 @@ export default function Home() {
   useEffect(() => {
     (async () => {
       try {
-        const resp = await fetch(`${SERVER_URL}/api/presets`);
+        const resp = await fetch(`${SERVER_URL}/presets`);
         if (resp.ok) setPresets(await resp.json());
       } catch {}
     })();
@@ -104,7 +105,7 @@ export default function Home() {
     setProgress(0);
     setDownloadUrl(null);
     try {
-      const resp = await fetch(`${SERVER_URL}/api/export`, {
+      const resp = await fetch(`${SERVER_URL}/export`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ fileId, options }),
@@ -112,15 +113,16 @@ export default function Home() {
       const json = await resp.json();
       if (!resp.ok) throw new Error(json.error || "Export failed");
       const jobId = json.jobId as string;
-      const evt = new EventSource(`${SERVER_URL}/api/progress/${jobId}`);
+      const evt = new EventSource(`${SERVER_URL}/progress/${jobId}`);
       evt.onmessage = (m) => {
         const data = JSON.parse(m.data);
         if (typeof data.percent === "number") setProgress(data.percent);
-        if (data.status === "completed" && data.downloadUrl) {
-          setDownloadUrl(`${SERVER_URL}${data.downloadUrl}`);
-          setIsExporting(false);
-          evt.close();
-        }
+                  if (data.status === "completed" && data.downloadUrl) {
+            const dl = String(data.downloadUrl).replace(/^\/api\//, '/');
+            setDownloadUrl(`${SERVER_URL}${dl}`);
+            setIsExporting(false);
+            evt.close();
+          }
         if (data.status === "error") {
           alert(data.error || "Export error");
           setIsExporting(false);
@@ -137,13 +139,13 @@ export default function Home() {
     const name = prompt("Preset name?");
     if (!name) return;
     try {
-      const resp = await fetch(`${SERVER_URL}/api/presets`, {
+      const resp = await fetch(`${SERVER_URL}/presets`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, options }),
       });
       if (resp.ok) {
-        const updated = await fetch(`${SERVER_URL}/api/presets`).then((r) => r.json());
+        const updated = await fetch(`${SERVER_URL}/presets`).then((r) => r.json());
         setPresets(updated);
       } else {
         const j = await resp.json();
@@ -178,7 +180,7 @@ export default function Home() {
     if (!fileId) return;
     if (segments.length === 0) return alert("Add at least one segment");
     try {
-      const resp = await fetch(`${SERVER_URL}/api/split`, {
+      const resp = await fetch(`${SERVER_URL}/split`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ fileId, segments }),
