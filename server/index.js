@@ -14,8 +14,9 @@ ffmpeg.setFfmpegPath(ffmpegPath);
 ffmpeg.setFfprobePath(ffprobePath);
 
 const app = express();
-app.use(express.json());
-app.use(cors({ origin: '*'}));
+app.use(cors({ origin: true, credentials: false }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 const PORT = process.env.PORT || 4000;
 const ROOT = __dirname;
